@@ -16,7 +16,7 @@ class TokenBucketRateLimiterTest {
     @Test
     void tryConsume_OneUser() {
         Clock clock = mock(Clock.class);
-        Mockito.when(clock.millis()).thenReturn(0L, 0L, 1000L, 4999L, 5000L, 5001L,
+        Mockito.when(clock.millis()).thenReturn(0L, 0L, 1000L, 4999L, 5000L, 5000L,
                 5002L, 15000L, 15001L, 15002L);
 
         TokenBucketRateLimiter rateLimiter = new TokenBucketRateLimiter(RATE, PERIOD, clock);

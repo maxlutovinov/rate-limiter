@@ -16,7 +16,7 @@
 ## Description
 
 This is a Java implementation of the rate limiter using token bucket algorithm for incoming HTTP requests
-without using 3rd party dependencies.
+without using third party dependencies.
 The primary purpose of the project is to explore how this algorithm functions.
 
 ## Features
@@ -30,12 +30,13 @@ different users with unique keys to acquire the access tokens.
 
 ## Structure
 
-The project have a layered system architecture that includes the following layers of functionality:
+The project has a layered system architecture that includes the following layers of functionality:
 
-- [Controller](src/main/java/app/ratelimiter/controller) processes HTTP requests sent from the user interface
-  and responds to the user.
-- [Service](src/main/java/app/ratelimiter/service) is responsible for the rate limiting of the requests from
-  the controller.
+- [Filter](src/main/java/app/ratelimiter/filter) filters access to specific endpoints by limiting the number of requests
+  per period from a unique IP address.
+- [Controller](src/main/java/app/ratelimiter/controller) processes HTTP requests sent from the user interface and
+  responds to the user.
+- [Service](src/main/java/app/ratelimiter/service) is responsible for the business logic of rate limiting.
 - [Model](src/main/java/app/ratelimiter/model) keeps the state of rate limiting.
 
 ## Technology stack
