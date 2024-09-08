@@ -3,8 +3,9 @@ package app.ratelimiter.service.impl;
 import app.ratelimiter.model.Bucket;
 import app.ratelimiter.service.RateLimiter;
 import java.time.Clock;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,7 @@ public class TokenBucketRateLimiter implements RateLimiter {
     private final long rate;
     private final long period;
     private final Clock clock;
-    private final Map<String, Bucket> userTokenBucket = new HashMap<>();
+    private final Map<String, Bucket> userTokenBucket = new ConcurrentHashMap<>();
 
     /**
      * Constructs a TokenBucketRateLimiter with the specified parameters.
@@ -53,14 +54,14 @@ public class TokenBucketRateLimiter implements RateLimiter {
     public boolean tryConsume(String userKey) {
         // Retrieve the bucket for the existing user or initialize an empty bucket for a new user
         Bucket bucket = userTokenBucket.computeIfAbsent(userKey,
-                k -> new Bucket(clock.millis(), rate));
+                k -> new Bucket(clock.millis(), new AtomicLong(rate)));
 
         // Refill the bucket with tokens based on elapsed time since the last refill.
         refill(bucket);
 
         // Consume a single token from the bucket, if available.
-        if (bucket.getTokenCount() > 0) {
-            bucket.setTokenCount(bucket.getTokenCount() - 1);
+        if (bucket.getTokenCount().get() > 0) {
+            bucket.getTokenCount().decrementAndGet();
             return true;
         }
         return false;
@@ -76,9 +77,12 @@ public class TokenBucketRateLimiter implements RateLimiter {
     private void refill(Bucket bucket) {
         long currentTime = clock.millis();
         long elapsedPeriods = (currentTime - bucket.getRefillTimestamp()) / period;
-        long tokensToRefill = Math.min(rate, bucket.getTokenCount() + elapsedPeriods * rate);
+        long tokensToRefill = Math.min(rate,
+                bucket.getTokenCount().addAndGet(elapsedPeriods * rate));
 
-        bucket.setTokenCount(tokensToRefill);
-        bucket.setRefillTimestamp(bucket.getRefillTimestamp() + elapsedPeriods * period);
+        if (tokensToRefill > 0) {
+            bucket.getTokenCount().set(tokensToRefill);
+            bucket.setRefillTimestamp(bucket.getRefillTimestamp() + elapsedPeriods * period);
+        }
     }
 }
