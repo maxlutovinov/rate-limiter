@@ -8,12 +8,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TokenBucketRateLimiter implements RateLimiter {
     private final long rate;
     private final long period;
+    private final long cacheClearInterval;
     private final Clock clock;
     private final Map<String, Bucket> userTokenBucket = new ConcurrentHashMap<>();
 
@@ -25,9 +27,11 @@ public class TokenBucketRateLimiter implements RateLimiter {
      */
     @Autowired
     public TokenBucketRateLimiter(@Value("${rate}") long rate,
-                                  @Value("${period}") long period) {
+                                  @Value("${period}") long period,
+                                  @Value("${cache_clear_interval}") long cacheClearInterval) {
         this.rate = rate;
         this.period = period;
+        this.cacheClearInterval = cacheClearInterval;
         clock = Clock.systemUTC();
     }
 
@@ -38,9 +42,10 @@ public class TokenBucketRateLimiter implements RateLimiter {
      * @param period The period for the tokens refill.
      * @param clock  The clock instance to use for timing.
      */
-    public TokenBucketRateLimiter(long rate, long period, Clock clock) {
+    public TokenBucketRateLimiter(long rate, long period, long cacheClearInterval, Clock clock) {
         this.rate = rate;
         this.period = period;
+        this.cacheClearInterval = cacheClearInterval;
         this.clock = clock;
     }
 
@@ -80,9 +85,24 @@ public class TokenBucketRateLimiter implements RateLimiter {
         long tokensToRefill = Math.min(rate,
                 bucket.getTokenCount().addAndGet(elapsedPeriods * rate));
 
-        if (tokensToRefill > 0) {
-            bucket.getTokenCount().set(tokensToRefill);
-            bucket.setRefillTimestamp(bucket.getRefillTimestamp() + elapsedPeriods * period);
-        }
+        bucket.getTokenCount().set(tokensToRefill);
+        bucket.setRefillTimestamp(bucket.getRefillTimestamp() + elapsedPeriods * period);
+    }
+
+    /**
+     * Clear the user cache every time interval specified in the application properties.
+     *
+     * @return Map of user keys to user buckets.
+     */
+    @Scheduled(fixedDelayString = "${cache_clear_interval}")
+    public Map<String, Bucket> clearUserCache() {
+        long currentTime = clock.millis();
+        userTokenBucket.forEach((key, value) -> {
+            long downtime = currentTime - value.getRefillTimestamp();
+            if (downtime >= cacheClearInterval) {
+                userTokenBucket.remove(key);
+            }
+        });
+        return userTokenBucket;
     }
 }
